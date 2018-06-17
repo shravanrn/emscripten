@@ -1,3 +1,5 @@
+Modification of emscripten's libc (musl) to preserve the illusion of the LP64 machine model to C
+
 ![emscripten logo](media/switch_logo.png)
 
 [![Build Status](https://travis-ci.org/kripken/emscripten.svg?branch=incoming)](https://travis-ci.org/kripken/emscripten)
