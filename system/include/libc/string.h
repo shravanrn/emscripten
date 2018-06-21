@@ -22,12 +22,12 @@ extern "C" {
 
 #include <bits/alltypes.h>
 
-void *memcpy (void *__restrict, const void *__restrict, size_t);
+void *memcpy (void *__restrict, const void *__restrict, unsigned int);
 void *memmove (void *, const void *, size_t);
 //LLVM expects param3 of memset (which is an llvm intrinsic) to correspond to the size of an llvm pointer (4bytes)
 //We had added modifications that make the C pointer 8 bytes. So change the sig of memset
 // void *memset (void *, int, size_t);
-void *memset (void *, int, int);
+void *memset (void *, int, unsigned int);
 int memcmp (const void *, const void *, size_t);
 void *memchr (const void *, int, size_t);
 

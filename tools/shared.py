@@ -920,7 +920,7 @@ def check_vanilla():
       return has_wasm_target(targets) and not has_asm_js_target(targets)
     def get_vanilla_file():
       saved_file = os.path.join(temp_cache.dirname, 'is_vanilla.txt')
-      open(saved_file, 'w').write(('1' if check_vanilla() else '0') + ':' + LLVM_ROOT)
+      open(saved_file, 'w').write(('1' if check_vanilla() else '0') + ':' + 'LP64bitCABI/' + LLVM_ROOT)
       return saved_file
     is_vanilla_file = temp_cache.get('is_vanilla', get_vanilla_file, extension='.txt')
     if CONFIG_FILE and os.stat(CONFIG_FILE).st_mtime > os.stat(is_vanilla_file).st_mtime:
@@ -931,7 +931,7 @@ def check_vanilla():
       middle = contents.index(':')
       is_vanilla = int(contents[:middle])
       llvm_used = contents[middle + 1:]
-      if llvm_used != LLVM_ROOT:
+      if llvm_used != ('LP64bitCABI/' + LLVM_ROOT):
         logging.debug('regenerating vanilla check since other llvm')
         temp_cache.get('is_vanilla', get_vanilla_file, extension='.txt', force=True)
         is_vanilla = check_vanilla()
@@ -974,7 +974,8 @@ if get_llvm_target() == WASM_TARGET:
   COMPILER_OPTS = COMPILER_OPTS + ['-D__EMSCRIPTEN__',
                                    '-Dunix',
                                    '-D__unix',
-                                   '-D__unix__']
+                                   '-D__unix__',
+                                   '--wasm-host-triple=x86_64-unknown-linux-gnu']
 
 # Changes to default clang behavior
 
