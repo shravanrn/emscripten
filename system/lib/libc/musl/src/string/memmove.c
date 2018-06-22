@@ -4,7 +4,7 @@
 #define WT size_t
 #define WS (sizeof(WT))
 
-void *memmove(void *dest, const void *src, size_t n)
+void *memmove(void *dest, const void *src, unsigned int n)
 {
 	char *d = dest;
 	const char *s = src;
