@@ -309,6 +309,8 @@ def run():
   global final
   target = None
 
+  print("EMCC RUNNING: " + str(sys.argv))
+
   if DEBUG: logging.warning('invocation: ' + ' '.join(sys.argv) + (' + ' + EMCC_CFLAGS if EMCC_CFLAGS else '') + '  (in ' + os.getcwd() + ')')
   if EMCC_CFLAGS: sys.argv.extend(shlex.split(EMCC_CFLAGS))
 

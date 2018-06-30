@@ -123,6 +123,7 @@ class Py2CompletedProcess:
       raise Py2CalledProcessError(returncode=self.returncode, cmd=self.args, output=self.stdout, stderr=self.stderr)
 
 def run_base(cmd, check=False, input=None, *args, **kw):
+  print("SUB: " + str(cmd) + str(*args))
   if hasattr(subprocess, "run"):
     return subprocess.run(cmd, check=check, input=input, *args, **kw)
 
@@ -141,6 +142,7 @@ def run_process(cmd, universal_newlines=True, check=True, *args, **kw):
 
 def execute(cmd, *args, **kw):
   try:
+    print("SUB: " + str(cmd) + str(*args))
     cmd[0] = Building.remove_quotes(cmd[0])
     return Popen(cmd, universal_newlines=True, *args, **kw).communicate() # let compiler frontend print directly, so colors are saved (PIPE kills that)
   except:
@@ -153,6 +155,7 @@ def check_execute(cmd, *args, **kw):
   # TODO: use in more places. execute doesn't actually check that return values
   # are nonzero
   try:
+    print("SUB: " + str(cmd) + str(*args))
     subprocess.check_output(cmd, *args, **kw)
     logging.debug("Successfuly executed %s" % " ".join(cmd))
   except subprocess.CalledProcessError as e:
@@ -160,6 +163,7 @@ def check_execute(cmd, *args, **kw):
 
 def check_call(cmd, *args, **kw):
   try:
+    print("SUB: " + str(cmd) + str(*args))
     subprocess.check_call(cmd, *args, **kw)
     logging.debug("Successfully executed %s" % " ".join(cmd))
   except subprocess.CalledProcessError as e:
