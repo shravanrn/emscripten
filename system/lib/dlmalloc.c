@@ -2737,7 +2737,7 @@ static struct malloc_state _gm_;
 ((char*)(A) >= S->base && (char*)(A) < S->base + S->size)
 
 /* Return segment holding given address */
-static msegmentptr segment_holding(mstate m, char* addr) {
+static msegmentptr __attribute__ ((noinline)) segment_holding(mstate m, char* addr) {
     msegmentptr sp = &m->seg;
     for (;;) {
         if (addr >= sp->base && addr < sp->base + sp->size)
@@ -3862,7 +3862,7 @@ if (m == gm) dlfree(mem); else mspace_free(m,mem);
  */
 
 /* Malloc using mmap */
-static void* mmap_alloc(mstate m, size_t nb) {
+static void* __attribute__ ((noinline)) mmap_alloc(mstate m, size_t nb) {
     size_t mmsize = mmap_align(nb + SIX_SIZE_T_SIZES + CHUNK_ALIGN_MASK);
     if (m->footprint_limit != 0) {
         size_t fp = m->footprint + mmsize;
@@ -3932,7 +3932,7 @@ static mchunkptr mmap_resize(mstate m, mchunkptr oldp, size_t nb, int flags) {
 /* -------------------------- mspace management -------------------------- */
 
 /* Initialize top chunk and its size */
-static void init_top(mstate m, mchunkptr p, size_t psize) {
+static void __attribute__ ((noinline)) init_top(mstate m, mchunkptr p, size_t psize) {
     /* Ensure alignment */
     size_t offset = align_offset(chunk2mem(p));
     p = (mchunkptr)((char*)p + offset);
@@ -3947,7 +3947,7 @@ static void init_top(mstate m, mchunkptr p, size_t psize) {
 }
 
 /* Initialize bins for a new mstate that is otherwise zeroed out */
-static void init_bins(mstate m) {
+static void __attribute__ ((noinline)) init_bins(mstate m) {
     /* Establish circular links for smallbins */
     bindex_t i;
     for (i = 0; i < NSMALLBINS; ++i) {
@@ -3976,7 +3976,7 @@ static void reset_on_error(mstate m) {
 #endif /* PROCEED_ON_ERROR */
 
 /* Allocate chunk and prepend remainder with chunk in successor base. */
-static void* prepend_alloc(mstate m, char* newbase, char* oldbase,
+static void* __attribute__ ((noinline)) prepend_alloc(mstate m, char* newbase, char* oldbase,
                            size_t nb) {
     mchunkptr p = align_as_chunk(newbase);
     mchunkptr oldfirst = align_as_chunk(oldbase);
@@ -4017,9 +4017,12 @@ static void* prepend_alloc(mstate m, char* newbase, char* oldbase,
     return chunk2mem(p);
 }
 
+void MARKERFUNC(unsigned int);
+
 /* Add a segment to hold a new noncontiguous region */
-static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
+static void __attribute__ ((noinline)) add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
     /* Determine locations and sizes of segment, fenceposts, old top */
+    MARKERFUNC(400);
     char* old_top = (char*)m->top;
     msegmentptr oldsp = segment_holding(m, old_top);
     char* old_end = oldsp->base + oldsp->size;
@@ -4028,38 +4031,51 @@ static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
     size_t offset = align_offset(chunk2mem(rawsp));
     char* asp = rawsp + offset;
     char* csp = (asp < (old_top + MIN_CHUNK_SIZE))? old_top : asp;
+    MARKERFUNC(401);
     mchunkptr sp = (mchunkptr)csp;
     msegmentptr ss = (msegmentptr)(chunk2mem(sp));
     mchunkptr tnext = chunk_plus_offset(sp, ssize);
     mchunkptr p = tnext;
     int nfences = 0;
+    MARKERFUNC(402);
     
     /* reset top to new space */
     init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
     
     /* Set up segment record */
     assert(is_aligned(ss));
+    MARKERFUNC(403);
     set_size_and_pinuse_of_inuse_chunk(m, sp, ssize);
     *ss = m->seg; /* Push current record */
     m->seg.base = tbase;
     m->seg.size = tsize;
     m->seg.sflags = mmapped;
     m->seg.next = ss;
+    MARKERFUNC(404);
     
     /* Insert trailing fenceposts */
     for (;;) {
+        MARKERFUNC(405);
         mchunkptr nextp = chunk_plus_offset(p, SIZE_T_SIZE);
         p->head = FENCEPOST_HEAD;
         ++nfences;
         if ((char*)(&(nextp->head)) < old_end)
+        {
+            MARKERFUNC(406);
             p = nextp;
+        }
         else
+        {
+            MARKERFUNC(407);
             break;
+        }
     }
+    MARKERFUNC(408);
     assert(nfences >= 2);
     
     /* Insert the rest of old top into a bin as an ordinary free chunk */
     if (csp != old_top) {
+        MARKERFUNC(409);
         mchunkptr q = (mchunkptr)old_top;
         size_t psize = csp - old_top;
         mchunkptr tn = chunk_plus_offset(q, psize);
@@ -4067,36 +4083,56 @@ static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
         insert_chunk(m, q, psize);
     }
     
+    MARKERFUNC(410);
     check_top_chunk(m, m->top);
+    MARKERFUNC(411);
 }
 
 /* -------------------------- System allocation -------------------------- */
 
 /* Get memory from system using MORECORE or MMAP */
-static void* sys_alloc(mstate m, size_t nb) {
+void* __attribute__ ((noinline)) sys_alloc(mstate m, size_t nb) {
     char* tbase = CMFAIL;
     size_t tsize = 0;
     flag_t mmap_flag = 0;
     size_t asize; /* allocation size */
     
+    MARKERFUNC(300);
     ensure_initialization();
+    MARKERFUNC(301);
     
     /* Directly map large chunks, but only if already initialized */
     if (use_mmap(m) && nb >= mparams.mmap_threshold && m->topsize != 0) {
+        MARKERFUNC(302);
         void* mem = mmap_alloc(m, nb);
+        MARKERFUNC(303);
         if (mem != 0)
+        {
+            MARKERFUNC(304);
             return mem;
+        }
+        MARKERFUNC(305);
     }
     
+    MARKERFUNC(306);
     asize = granularity_align(nb + SYS_ALLOC_PADDING);
-    if (asize <= nb)
+    MARKERFUNC(307);
+    if (asize <= nb) {
+        MARKERFUNC(308);
         return 0; /* wraparound */
+    }
+    MARKERFUNC(309);
     if (m->footprint_limit != 0) {
+        MARKERFUNC(310);
         size_t fp = m->footprint + asize;
         if (fp <= m->footprint || fp > m->footprint_limit)
+        {
+            MARKERFUNC(311);
             return 0;
+        }
+        MARKERFUNC(312);
     }
-    
+    MARKERFUNC(313);
     /*
      Try getting memory in any of three ways (in most-preferred to
      least-preferred order):
@@ -4119,78 +4155,125 @@ static void* sys_alloc(mstate m, size_t nb) {
      not on boundary, and round this up to a granularity unit.
      */
     
+    MARKERFUNC(314);
     if (MORECORE_CONTIGUOUS && !use_noncontiguous(m)) {
+        MARKERFUNC(315);
         char* br = CMFAIL;
         size_t ssize = asize; /* sbrk call size */
         msegmentptr ss = (m->top == 0)? 0 : segment_holding(m, (char*)m->top);
         ACQUIRE_MALLOC_GLOBAL_LOCK();
         
+        MARKERFUNC(316);
         if (ss == 0) {  /* First time through or recovery */
+            MARKERFUNC(317);
             char* base = (char*)CALL_MORECORE(0);
+            MARKERFUNC(318);
             if (base != CMFAIL) {
+                MARKERFUNC(319);
                 size_t fp;
                 /* Adjust to end on a page boundary */
                 if (!is_page_aligned(base))
+                {
+                    MARKERFUNC(320);
                     ssize += (page_align((size_t)base) - (size_t)base);
+                }
+                MARKERFUNC(321);
                 fp = m->footprint + ssize; /* recheck limits */
                 if (ssize > nb && ssize < HALF_MAX_SIZE_T &&
                     (m->footprint_limit == 0 ||
                      (fp > m->footprint && fp <= m->footprint_limit)) &&
                     (br = (char*)(CALL_MORECORE(ssize))) == base) {
+                    MARKERFUNC(322);
                     tbase = base;
                     tsize = ssize;
                 }
+                MARKERFUNC(323);
             }
+            MARKERFUNC(324);
         }
         else {
+            MARKERFUNC(325);
             /* Subtract out existing available top space from MORECORE request. */
             ssize = granularity_align(nb - m->topsize + SYS_ALLOC_PADDING);
             /* Use mem here only if it did continuously extend old space */
+            MARKERFUNC(326);
             if (ssize < HALF_MAX_SIZE_T &&
                 (br = (char*)(CALL_MORECORE(ssize))) == ss->base+ss->size) {
+                MARKERFUNC(327);
                 tbase = br;
                 tsize = ssize;
             }
+            MARKERFUNC(328);
         }
+
+        MARKERFUNC(329);
         
         if (tbase == CMFAIL) {    /* Cope with partial failure */
+            MARKERFUNC(330);
             if (br != CMFAIL) {    /* Try to use/extend the space we did get */
+                MARKERFUNC(331);
                 if (ssize < HALF_MAX_SIZE_T &&
                     ssize < nb + SYS_ALLOC_PADDING) {
+                    MARKERFUNC(332);
                     size_t esize = granularity_align(nb + SYS_ALLOC_PADDING - ssize);
+                    MARKERFUNC(333);
                     if (esize < HALF_MAX_SIZE_T) {
+                        MARKERFUNC(334);
                         char* end = (char*)CALL_MORECORE(esize);
-                        if (end != CMFAIL)
+                        MARKERFUNC(335);
+                        if (end != CMFAIL){
+                            MARKERFUNC(336);
                             ssize += esize;
+                        }
                         else {            /* Can't use; try to release */
+                            MARKERFUNC(337);
                             (void) CALL_MORECORE(-ssize);
                             br = CMFAIL;
                         }
+                        MARKERFUNC(338);
                     }
+                    MARKERFUNC(339);
                 }
+                MARKERFUNC(340);
             }
+            MARKERFUNC(341);
             if (br != CMFAIL) {    /* Use the space we did get */
+                MARKERFUNC(342);
                 tbase = br;
                 tsize = ssize;
             }
-            else
+            else{
+                MARKERFUNC(343);
                 disable_contiguous(m); /* Don't try contiguous path in the future */
+            }
+            MARKERFUNC(344);
         }
+        MARKERFUNC(345);
         
         RELEASE_MALLOC_GLOBAL_LOCK();
+
+        MARKERFUNC(346);
     }
     
+    MARKERFUNC(347);
     if (HAVE_MMAP && tbase == CMFAIL) {  /* Try MMAP */
+        MARKERFUNC(348);
         char* mp = (char*)(CALL_MMAP(asize));
+        MARKERFUNC(349);
         if (mp != CMFAIL) {
+            MARKERFUNC(350);
             tbase = mp;
             tsize = asize;
             mmap_flag = USE_MMAP_BIT;
         }
+        MARKERFUNC(351);
     }
+    MARKERFUNC(352);
     
     if (HAVE_MORECORE && tbase == CMFAIL) { /* Try noncontiguous MORECORE */
+        MARKERFUNC(353);
         if (asize < HALF_MAX_SIZE_T) {
+            MARKERFUNC(354);
             char* br = CMFAIL;
             char* end = CMFAIL;
             ACQUIRE_MALLOC_GLOBAL_LOCK();
@@ -4198,23 +4281,37 @@ static void* sys_alloc(mstate m, size_t nb) {
             end = (char*)(CALL_MORECORE(0));
             RELEASE_MALLOC_GLOBAL_LOCK();
             if (br != CMFAIL && end != CMFAIL && br < end) {
+                MARKERFUNC(355);
                 size_t ssize = end - br;
                 if (ssize > nb + TOP_FOOT_SIZE) {
+                    MARKERFUNC(356);
                     tbase = br;
                     tsize = ssize;
                 }
+                MARKERFUNC(357);
             }
+            MARKERFUNC(358);
         }
+        MARKERFUNC(359);
     }
+    MARKERFUNC(360);
     
     if (tbase != CMFAIL) {
+        MARKERFUNC(361);
         
-        if ((m->footprint += tsize) > m->max_footprint)
+        if ((m->footprint += tsize) > m->max_footprint) {
+            MARKERFUNC(362);
             m->max_footprint = m->footprint;
-        
+        }
+
+        MARKERFUNC(363);
         if (!is_initialized(m)) { /* first-time initialization */
-            if (m->least_addr == 0 || tbase < m->least_addr)
+            MARKERFUNC(364);
+            if (m->least_addr == 0 || tbase < m->least_addr){
+                MARKERFUNC(365);
                 m->least_addr = tbase;
+            }
+            MARKERFUNC(366);
             m->seg.base = tbase;
             m->seg.size = tsize;
             m->seg.sflags = mmap_flag;
@@ -4222,50 +4319,74 @@ static void* sys_alloc(mstate m, size_t nb) {
             m->release_checks = MAX_RELEASE_CHECK_RATE;
             init_bins(m);
 #if !ONLY_MSPACES
-            if (is_global(m))
+            if (is_global(m)){
+                MARKERFUNC(367);
                 init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
+                MARKERFUNC(368);
+            }
             else
 #endif
             {
+                MARKERFUNC(369);
                 /* Offset top by embedded malloc_state */
                 mchunkptr mn = next_chunk(mem2chunk(m));
                 init_top(m, mn, (size_t)((tbase + tsize) - (char*)mn) -TOP_FOOT_SIZE);
+                MARKERFUNC(370);
             }
-        }
-        
+            MARKERFUNC(371);
+        }        
         else {
+            MARKERFUNC(372);
             /* Try to merge with an existing segment */
             msegmentptr sp = &m->seg;
             /* Only consider most recent segment if traversal suppressed */
-            while (sp != 0 && tbase != sp->base + sp->size)
+            while (sp != 0 && tbase != sp->base + sp->size){
+                MARKERFUNC(373);
                 sp = (NO_SEGMENT_TRAVERSAL) ? 0 : sp->next;
+            }
+            MARKERFUNC(374);
             if (sp != 0 &&
                 !is_extern_segment(sp) &&
                 (sp->sflags & USE_MMAP_BIT) == mmap_flag &&
                 segment_holds(sp, m->top)) { /* append */
+                MARKERFUNC(375);
                 sp->size += tsize;
                 init_top(m, m->top, m->topsize + tsize);
+                MARKERFUNC(376);
             }
             else {
-                if (tbase < m->least_addr)
+                MARKERFUNC(377);
+                if (tbase < m->least_addr){
+                    MARKERFUNC(378);
                     m->least_addr = tbase;
+                }
+                MARKERFUNC(379);
                 sp = &m->seg;
-                while (sp != 0 && sp->base != tbase + tsize)
+                while (sp != 0 && sp->base != tbase + tsize){
+                    MARKERFUNC(380);
                     sp = (NO_SEGMENT_TRAVERSAL) ? 0 : sp->next;
+                }
                 if (sp != 0 &&
                     !is_extern_segment(sp) &&
                     (sp->sflags & USE_MMAP_BIT) == mmap_flag) {
+                    MARKERFUNC(381);
                     char* oldbase = sp->base;
                     sp->base = tbase;
                     sp->size += tsize;
                     return prepend_alloc(m, tbase, oldbase, nb);
                 }
-                else
+                else{
+                    MARKERFUNC(382);
                     add_segment(m, tbase, tsize, mmap_flag);
+                }
+                MARKERFUNC(383);
             }
+            MARKERFUNC(384);
         }
+        MARKERFUNC(385);
         
         if (nb < m->topsize) { /* Allocate from new or extended top space */
+            MARKERFUNC(386);
             size_t rsize = m->topsize -= nb;
             mchunkptr p = m->top;
             mchunkptr r = m->top = chunk_plus_offset(p, nb);
@@ -4275,7 +4396,9 @@ static void* sys_alloc(mstate m, size_t nb) {
             check_malloced_chunk(m, chunk2mem(p), nb);
             return chunk2mem(p);
         }
+        MARKERFUNC(387);
     }
+    MARKERFUNC(388);
     
     MALLOC_FAILURE_ACTION;
     return 0;
@@ -4473,6 +4596,7 @@ static void dispose_chunk(mstate m, mchunkptr p, size_t psize) {
 unsigned int GLMARKERFUNC = 0;
 void __attribute__ ((noinline)) MARKERFUNC(unsigned int a)
 {
+    printf("MallocNum: %u\n", a);
     GLMARKERFUNC = a;
 }
 
@@ -4655,20 +4779,31 @@ void* dlmalloc(size_t bytes) {
             bindex_t idx;
             binmap_t smallbits;
             nb = (bytes < MIN_REQUEST)? MIN_CHUNK_SIZE : pad_request(bytes);
+            MARKERFUNC(226);
             idx = small_index(nb);
+            MARKERFUNC(227);
             smallbits = gm->smallmap >> idx;
+            MARKERFUNC(228);
             
             if ((smallbits & 0x3U) != 0) { /* Remainderless fit to a smallbin. */
                 MARKERFUNC(3);
                 mchunkptr b, p;
                 idx += ~smallbits & 1;       /* Uses next bin if idx empty */
+                MARKERFUNC(218);
                 b = smallbin_at(gm, idx);
+                MARKERFUNC(219);
                 p = b->fd;
+                MARKERFUNC(220);
                 assert(chunksize(p) == small_index2size(idx));
+                MARKERFUNC(221);
                 unlink_first_small_chunk(gm, b, p, idx);
+                MARKERFUNC(222);
                 set_inuse_and_pinuse(gm, p, small_index2size(idx));
+                MARKERFUNC(223);
                 mem = chunk2mem(p);
+                MARKERFUNC(224);
                 check_malloced_chunk(gm, mem, nb);
+                MARKERFUNC(225);
                 goto postaction;
             }
             
@@ -4680,13 +4815,21 @@ void* dlmalloc(size_t bytes) {
                     size_t rsize;
                     bindex_t i;
                     binmap_t leftbits = (smallbits << idx) & left_bits(idx2bit(idx));
+                    MARKERFUNC(229);
                     binmap_t leastbit = least_bit(leftbits);
+                    MARKERFUNC(230);
                     compute_bit2idx(leastbit, i);
+                    MARKERFUNC(231);
                     b = smallbin_at(gm, i);
+                    MARKERFUNC(232);
                     p = b->fd;
+                    MARKERFUNC(233);
                     assert(chunksize(p) == small_index2size(i));
+                    MARKERFUNC(234);
                     unlink_first_small_chunk(gm, b, p, i);
+                    MARKERFUNC(235);
                     rsize = small_index2size(i) - nb;
+                    MARKERFUNC(236);
                     /* Fit here cannot be remainderless if 4byte sizes */
                     if (SIZE_T_SIZE != 4 && rsize < MIN_CHUNK_SIZE) {
                         MARKERFUNC(6);
@@ -4695,9 +4838,13 @@ void* dlmalloc(size_t bytes) {
                     else {
                         MARKERFUNC(7);
                         set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+                        MARKERFUNC(237);
                         r = chunk_plus_offset(p, nb);
+                        MARKERFUNC(238);
                         set_size_and_pinuse_of_free_chunk(r, rsize);
+                        MARKERFUNC(239);
                         replace_dv(gm, r, rsize);
+                        MARKERFUNC(240);
                     }
                     MARKERFUNC(8);
                     mem = chunk2mem(p);
@@ -4736,33 +4883,51 @@ void* dlmalloc(size_t bytes) {
             if (rsize >= MIN_CHUNK_SIZE) { /* split dv */
                 MARKERFUNC(17);
                 mchunkptr r = gm->dv = chunk_plus_offset(p, nb);
+                MARKERFUNC(200);
                 gm->dvsize = rsize;
+                MARKERFUNC(201);
                 set_size_and_pinuse_of_free_chunk(r, rsize);
+                MARKERFUNC(202);
                 set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+                MARKERFUNC(203);
             }
             else { /* exhaust dv */
                 MARKERFUNC(18);
                 size_t dvs = gm->dvsize;
+                MARKERFUNC(204);
                 gm->dvsize = 0;
+                MARKERFUNC(205);
                 gm->dv = 0;
+                MARKERFUNC(206);
                 set_inuse_and_pinuse(gm, p, dvs);
+                MARKERFUNC(207);
             }
             MARKERFUNC(19);
             mem = chunk2mem(p);
+            MARKERFUNC(208);
             check_malloced_chunk(gm, mem, nb);
+            MARKERFUNC(209);
             goto postaction;
         }
         
         else if (nb < gm->topsize) { /* Split top */
             MARKERFUNC(20);
             size_t rsize = gm->topsize -= nb;
+            MARKERFUNC(210);
             mchunkptr p = gm->top;
+            MARKERFUNC(211);
             mchunkptr r = gm->top = chunk_plus_offset(p, nb);
+            MARKERFUNC(212);
             r->head = rsize | PINUSE_BIT;
+            MARKERFUNC(213);
             set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+            MARKERFUNC(214);
             mem = chunk2mem(p);
+            MARKERFUNC(215);
             check_top_chunk(gm, gm->top);
+            MARKERFUNC(216);
             check_malloced_chunk(gm, mem, nb);
+            MARKERFUNC(217);
             goto postaction;
         }
         MARKERFUNC(21);
