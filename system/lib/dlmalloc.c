@@ -4605,8 +4605,12 @@ void* __attribute__ ((noinline)) tmalloc_large(mstate m, size_t nb) {
     size_t rsize = -nb; /* Unsigned negation */
     tchunkptr t;
     bindex_t idx;
+    MARKERFUNC(97);
     compute_tree_index(nb, idx);
-    if ((t = *treebin_at(m, idx)) != 0) {
+    MARKERFUNC(98);
+    t = *treebin_at(m, idx);
+    MARKERFUNC(99);
+    if (t != 0) {
         MARKERFUNC(100);
         /* Traverse tree for this bin looking for node with size == nb */
         size_t sizebits = nb << leftshift_for_tree_index(idx);
@@ -4707,36 +4711,57 @@ void* __attribute__ ((noinline)) tmalloc_small(mstate m, size_t nb) {
     tchunkptr t, v;
     size_t rsize;
     bindex_t i;
+    MARKERFUNC(500);
     binmap_t leastbit = least_bit(m->treemap);
+    MARKERFUNC(501);
     compute_bit2idx(leastbit, i);
+    MARKERFUNC(502);
     v = t = *treebin_at(m, i);
+    MARKERFUNC(503);
     rsize = chunksize(t) - nb;
+    MARKERFUNC(504);
     
     while ((t = leftmost_child(t)) != 0) {
         size_t trem = chunksize(t) - nb;
+        MARKERFUNC(505);
         if (trem < rsize) {
+            MARKERFUNC(506);
             rsize = trem;
             v = t;
         }
+        MARKERFUNC(507);
     }
+    MARKERFUNC(508);
     
     if (RTCHECK(ok_address(m, v))) {
+        MARKERFUNC(509);
         mchunkptr r = chunk_plus_offset(v, nb);
         assert(chunksize(v) == rsize + nb);
         if (RTCHECK(ok_next(v, r))) {
+            MARKERFUNC(510);
             unlink_large_chunk(m, v);
-            if (rsize < MIN_CHUNK_SIZE)
+            MARKERFUNC(511);
+            if (rsize < MIN_CHUNK_SIZE){
+                MARKERFUNC(512);
                 set_inuse_and_pinuse(m, v, (rsize + nb));
+                MARKERFUNC(513);
+            }
             else {
+                MARKERFUNC(514);
                 set_size_and_pinuse_of_inuse_chunk(m, v, nb);
                 set_size_and_pinuse_of_free_chunk(r, rsize);
                 replace_dv(m, r, rsize);
+                MARKERFUNC(515);
             }
+            MARKERFUNC(516);
             return chunk2mem(v);
         }
+        MARKERFUNC(517);
     }
+    MARKERFUNC(518);
     
     CORRUPTION_ERROR_ACTION(m);
+    MARKERFUNC(519);
     return 0;
 }
 
@@ -4765,6 +4790,7 @@ void* dlmalloc(size_t bytes) {
      
      The ugly goto's here ensure that postaction occurs along all paths.
      */
+    return (char*)(CALL_MORECORE(bytes));
     
 #if USE_LOCKS
     ensure_initialization(); /* initialize in sys_alloc if not using locks */
@@ -4954,7 +4980,7 @@ void dlfree(void* mem) {
      free chunks, if they exist, and then place in a bin.  Intermixed
      with special cases for top, dv, mmapped chunks, and usage errors.
      */
-    
+    return;
     if (mem != 0) {
 #if __EMSCRIPTEN__
         /* XXX Emscripten Tracing API. */
