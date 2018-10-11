@@ -1025,7 +1025,8 @@ if get_llvm_target() == WASM_TARGET:
   COMPILER_OPTS += ['-D__EMSCRIPTEN__',
                     '-Dunix',
                     '-D__unix',
-                    '-D__unix__']
+                    '-D__unix__',
+                    '--wasm-host-triple=x86_64-unknown-linux-gnu']
 
 # Changes to default clang behavior
 
@@ -1055,7 +1056,7 @@ if USE_EMSDK:
     path_from_root('system', 'lib', 'libcxxabi', 'include')
   ]
 
-  C_OPTS = ['-nostdinc', '-Xclang', '-nobuiltininc', '-Xclang', '-nostdsysteminc']
+  C_OPTS = ['-nostdinc', '-Xclang', '-nobuiltininc', '-Xclang', '-nostdsysteminc', '--wasm-host-triple=x86_64-unknown-linux-gnu']
 
   def include_directive(paths):
     result = []
@@ -1071,6 +1072,7 @@ if USE_EMSDK:
 else:
   EMSDK_OPTS = []
   EMSDK_CXX_OPTS = []
+  COMPILER_OPTS += ['--wasm-host-triple=x86_64-unknown-linux-gnu']
 
 # Engine tweaks
 
