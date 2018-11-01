@@ -2221,12 +2221,13 @@ static int pthread_init_lock (MLOCK_T *lk) {
  for sake of usage checks.
  
  */
+typedef size_t u32;
 
 struct malloc_chunk {
     size_t               prev_foot;  /* Size of previous chunk (if free).  */
     size_t               head;       /* Size and inuse bits. */
-    struct malloc_chunk* fd;         /* double links -- used only if free. */
-    struct malloc_chunk* bk;
+    u32 fd;         /* double links -- used only if free. */
+    u32 bk;
 };
 
 typedef struct malloc_chunk  mchunk;
@@ -2435,11 +2436,11 @@ struct malloc_tree_chunk {
     /* The first four fields must be compatible with malloc_chunk */
     size_t                    prev_foot;
     size_t                    head;
-    struct malloc_tree_chunk* fd;
-    struct malloc_tree_chunk* bk;
+    u32 fd;
+    u32 bk;
     
-    struct malloc_tree_chunk* child[2];
-    struct malloc_tree_chunk* parent;
+    u32 child[2];
+    u32 parent;
     bindex_t                  index;
 };
 
@@ -3313,8 +3314,8 @@ static void do_check_free_chunk(mstate m, mchunkptr p) {
             assert(next->prev_foot == sz);
             assert(pinuse(p));
             assert (next == m->top || is_inuse(next));
-            assert(p->fd->bk == p);
-            assert(p->bk->fd == p);
+            assert(((struct malloc_tree_chunk*)p->fd)->bk == p);
+            assert(((struct malloc_tree_chunk*)p->bk)->fd == p);
         }
         else  /* markers are always of size SIZE_T_SIZE */
             assert(sz == SIZE_T_SIZE);
@@ -3354,8 +3355,8 @@ static void do_check_tree(mstate m, tchunkptr t) {
         assert(chunksize(u) == tsize);
         assert(!is_inuse(u));
         assert(!next_pinuse(u));
-        assert(u->fd->bk == u);
-        assert(u->bk->fd == u);
+        assert(((struct malloc_tree_chunk*)u->fd)->bk == u);
+        assert(((struct malloc_tree_chunk*)u->bk)->fd == u);
         if (u->parent == 0) {
             assert(u->child[0] == 0);
             assert(u->child[1] == 0);
@@ -3363,22 +3364,22 @@ static void do_check_tree(mstate m, tchunkptr t) {
         else {
             assert(head == 0); /* only one node on chain has parent */
             head = u;
-            assert(u->parent != u);
-            assert (u->parent->child[0] == u ||
-                    u->parent->child[1] == u ||
-                    *((tbinptr*)(u->parent)) == u);
-            if (u->child[0] != 0) {
-                assert(u->child[0]->parent == u);
-                assert(u->child[0] != u);
-                do_check_tree(m, u->child[0]);
+            assert(((struct malloc_tree_chunk*)u->parent) != u);
+            assert (((struct malloc_tree_chunk*)((struct malloc_tree_chunk*)u->parent)->child[0]) == u ||
+                    ((struct malloc_tree_chunk*)((struct malloc_tree_chunk*)u->parent)->child[1]) == u ||
+                    *((tbinptr*)(((struct malloc_tree_chunk*)u->parent))) == u);
+            if (((struct malloc_tree_chunk*)u->child[0]) != 0) {
+                assert(((struct malloc_tree_chunk*)((struct malloc_tree_chunk*)u->child[0])->parent) == u);
+                assert(((struct malloc_tree_chunk*)u->child[0]) != u);
+                do_check_tree(m, ((struct malloc_tree_chunk*)u->child[0]));
             }
-            if (u->child[1] != 0) {
-                assert(u->child[1]->parent == u);
-                assert(u->child[1] != u);
-                do_check_tree(m, u->child[1]);
+            if (((struct malloc_tree_chunk*)u->child[1]) != 0) {
+                assert(((struct malloc_tree_chunk*)((struct malloc_tree_chunk*)u->child[1])->parent) == u);
+                assert(((struct malloc_tree_chunk*)u->child[1]) != u);
+                do_check_tree(m, ((struct malloc_tree_chunk*)u->child[1]));
             }
-            if (u->child[0] != 0 && u->child[1] != 0) {
-                assert(chunksize(u->child[0]) < chunksize(u->child[1]));
+            if (((struct malloc_tree_chunk*)u->child[0]) != 0 && ((struct malloc_tree_chunk*)u->child[1]) != 0) {
+                assert(chunksize(((struct malloc_tree_chunk*)u->child[0])) < chunksize(((struct malloc_tree_chunk*)u->child[1])));
             }
         }
         u = u->fd;
@@ -3412,7 +3413,7 @@ static void do_check_smallbin(mstate m, bindex_t i) {
             do_check_free_chunk(m, p);
             /* chunk belongs in bin */
             assert(small_index(size) == i);
-            assert(p->bk == b || chunksize(p->bk) == chunksize(p));
+            assert(p->bk == b || chunksize((struct malloc_tree_chunk*)p->bk) == chunksize(p));
             /* chunk is followed by an inuse chunk */
             q = next_chunk(p);
             if (q->head != FENCEPOST_HEAD)
@@ -3693,7 +3694,7 @@ X->child[0] = X->child[1] = 0;\
 if (!treemap_is_marked(M, I)) {\
 mark_treemap(M, I);\
 *H = X;\
-X->parent = (tchunkptr)H;\
+X->parent = (u32) H;\
 X->fd = X->bk = X;\
 }\
 else {\
@@ -3707,7 +3708,7 @@ if (*C != 0)\
 T = *C;\
 else if (RTCHECK(ok_address(M, C))) {\
 *C = X;\
-X->parent = T;\
+X->parent = (u32) T;\
 X->fd = X->bk = X;\
 break;\
 }\
@@ -3752,7 +3753,7 @@ break;\
  */
 
 #define unlink_large_chunk(M, X) { \
-tchunkptr XP = X->parent; \
+tchunkptr XP = ((struct malloc_tree_chunk*)X->parent); \
 tchunkptr R; \
 if (X->bk != X) { \
 tchunkptr F = X->fd; \
@@ -3788,29 +3789,29 @@ if ((*H = R) == 0) \
 clear_treemap(M, X->index); \
 } \
 else if (RTCHECK(ok_address(M, XP))) { \
-if (XP->child[0] == X) \
-XP->child[0] = R; \
+if (((struct malloc_tree_chunk*)XP->child[0]) == X) \
+XP->child[0] = (u32) R; \
 else \
-XP->child[1] = R; \
+XP->child[1] = (u32) R; \
 } \
 else \
 CORRUPTION_ERROR_ACTION(M); \
 if (R != 0) { \
 if (RTCHECK(ok_address(M, R))) { \
 tchunkptr C0, C1; \
-R->parent = XP; \
-if ((C0 = X->child[0]) != 0) { \
+R->parent = (u32) XP; \
+if ((C0 = ((struct malloc_tree_chunk*)X->child[0])) != 0) { \
 if (RTCHECK(ok_address(M, C0))) { \
-R->child[0] = C0; \
-C0->parent = R; \
+R->child[0] = (u32) C0; \
+C0->parent = (u32) R; \
 } \
 else \
 CORRUPTION_ERROR_ACTION(M); \
 } \
-if ((C1 = X->child[1]) != 0) { \
+if ((C1 = ((struct malloc_tree_chunk*)X->child[1])) != 0) { \
 if (RTCHECK(ok_address(M, C1))) { \
-R->child[1] = C1; \
-C1->parent = R; \
+R->child[1] = (u32) C1; \
+C1->parent = (u32) R; \
 } \
 else \
 CORRUPTION_ERROR_ACTION(M); \
@@ -4487,7 +4488,7 @@ static void* tmalloc_large(mstate m, size_t nb) {
                 if ((rsize = trem) == 0)
                     break;
             }
-            rt = t->child[1];
+            rt = ((struct malloc_tree_chunk*)t->child[1]);
             t = t->child[(sizebits >> (SIZE_T_BITSIZE-SIZE_T_ONE)) & 1];
             if (rt != 0 && rt != t)
                 rst = rt;
